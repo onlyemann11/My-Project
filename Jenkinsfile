@@ -1,33 +1,36 @@
 pipeline {
-    agent any
-
-    stages {
-        stage('Install dependencies') {
-            steps {
-                sh '''
-                    python3 -m pip install --upgrade pip
-                    pip install pytest pytest-cov
-                '''
-            }
-        }
-
-        stage('Run unit tests') {
-            steps {
-                sh '''
-                    mkdir -p reports
-                    pytest --junitxml=reports/results.xml --cov=. --cov-report=xml:reports/coverage.xml
-                '''
-            }
-        }
+  agent {
+    docker {
+      image 'python:3.11-slim'
+      args '-u 0'
     }
+  }
 
-    post {
-        always {
-            // Publish the test results to Jenkins
-            junit 'reports/results.xml'
-            // Save coverage file so you can download/view it later
-            archiveArtifacts artifacts: 'reports/**', fingerprint: true
-        }
+  stages {
+    stage('Install deps') {
+      steps {
+        sh '''
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-cov
+        '''
+      }
     }
+    stage('Run unit tests') {
+      steps {
+        sh '''
+          mkdir -p reports/coverage_html
+          pytest -q --junitxml=reports/junit.xml
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      junit allowEmptyResults: true, testResults: 'reports/junit.xml'
+      archiveArtifacts artifacts: 'reports/**/*', fingerprint: true, onlyIfSuccessful: false
+    }
+  }
 }
 
